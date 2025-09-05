@@ -1,10 +1,10 @@
-// server.js
+// server.js (ADAPTADO A TU BASE DE DATOS EN HOSTINGER)
 import express from 'express';
 import cors from 'cors';
 import db from './db.js';
 
 const app = express();
-const port = 3001;
+const port = 3001; // Render asignará su propio puerto, pero esto es bueno para pruebas locales.
 
 app.use(cors());
 app.use(express.json());
@@ -13,15 +13,14 @@ app.get('/', (req, res) => {
   res.send('¡La API de Banco Warmi está funcionando!');
 });
 
-// --- NUEVO ENDPOINT PARA EL DASHBOARD ---
+// --- ENDPOINT PARA EL DASHBOARD (CORREGIDO) ---
 app.get('/dashboard/:socioId', async (req, res) => {
   const { socioId } = req.params;
   const cicloId = 1; // Asumimos que estamos en el ciclo actual (ID = 1)
 
   try {
-    // 1. Obtener el ID de la membresía para este socio y ciclo
     const [[membresia]] = await db.query(
-      'SELECT membresia_id, cantidad_acciones FROM Membresias_Ciclo WHERE socio_id = ? AND ciclo_id = ?',
+      'SELECT membresia_id, cantidad_acciones FROM membresias_ciclo WHERE socio_id = ? AND ciclo_id = ?',
       [socioId, cicloId]
     );
 
@@ -30,28 +29,25 @@ app.get('/dashboard/:socioId', async (req, res) => {
     }
     const { membresia_id, cantidad_acciones } = membresia;
 
-    // 2. Obtener el nombre del socio
-    const [[socio]] = await db.query('SELECT nombres, apellidos FROM Socios WHERE socio_id = ?', [socioId]);
+    const [[socio]] = await db.query('SELECT nombres, apellidos FROM socios WHERE socio_id = ?', [socioId]);
     
-    // 3. Calcular aportes acumulados
-    const [[aportes]] = await db.query('SELECT SUM(monto_aportado) as total FROM Aportes WHERE membresia_id = ?', [membresia_id]);
+    const [[aportes]] = await db.query('SELECT SUM(monto_aportado) as total FROM aportes WHERE membresia_id = ?', [membresia_id]);
     
-    // 4. Calcular multas acumuladas
-    const [[multas]] = await db.query('SELECT SUM(monto_multa) as total FROM Multas WHERE membresia_id = ?', [membresia_id]);
+    const [[multas]] = await db.query('SELECT SUM(monto_multa) as total FROM multas WHERE membresia_id = ?', [membresia_id]);
     
-    // 5. Obtener el último aporte
-    const [[ultimoAporte]] = await db.query('SELECT monto_aportado as monto FROM Aportes WHERE membresia_id = ? ORDER BY fecha_hora_aporte DESC LIMIT 1', [membresia_id]);
+    const [[ultimoAporte]] = await db.query('SELECT monto_aportado as monto FROM aportes WHERE membresia_id = ? ORDER BY fecha_hora_aporte DESC LIMIT 1', [membresia_id]);
 
-    // 6. Obtener los últimos 5 movimientos (aportes y multas)
     const [movimientos] = await db.query(`
-      (SELECT 'Aporte' as tipo, monto_aportado as monto, fecha_hora_aporte as fecha FROM Aportes WHERE membresia_id = ?)
+      (SELECT 'Aporte' as tipo, monto_aportado as monto, fecha_hora_aporte as fecha FROM aportes WHERE membresia_id = ?)
       UNION ALL
-      (SELECT Tipos_Multa.descripcion as tipo, -Multas.monto_multa as monto, Multas.fecha_multa as fecha FROM Multas JOIN Tipos_Multa ON Multas.tipo_multa_id = Tipos_Multa.tipo_multa_id WHERE Multas.membresia_id = ?)
+      (SELECT tm.descripcion as tipo, -m.monto_multa as monto, m.fecha_multa as fecha 
+       FROM multas as m 
+       JOIN tipos_multa as tm ON m.tipo_multa_id = tm.tipo_multa_id 
+       WHERE m.membresia_id = ?)
       ORDER BY fecha DESC
       LIMIT 5;
     `, [membresia_id, membresia_id]);
 
-    // 7. Construir el objeto de respuesta
     const dashboardData = {
       nombre: `${socio.nombres} ${socio.apellidos}`,
       aportesAcumulados: aportes.total || 0,
@@ -59,10 +55,10 @@ app.get('/dashboard/:socioId', async (req, res) => {
       multasAcumuladas: multas.total || 0,
       acciones: cantidad_acciones,
       movimientos: movimientos.map(m => ({
-          id: `${m.tipo}-${m.fecha}`, // ID único para la lista
+          id: `${m.tipo}-${m.fecha.toISOString()}`, // Usamos toISOString para un ID más único
           tipo: m.tipo,
           monto: m.monto,
-          fecha: new Date(m.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) // Formatear fecha
+          fecha: new Date(m.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
       }))
     };
 
@@ -74,7 +70,7 @@ app.get('/dashboard/:socioId', async (req, res) => {
   }
 });
 
-// --- NUEVO ENDPOINT PARA EL LOGIN ---
+// --- ENDPOINT PARA EL LOGIN (CORREGIDO) ---
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -83,18 +79,14 @@ app.post('/login', async (req, res) => {
   }
 
   try {
-    // --- LA CORRECCIÓN ESTÁ EN ESTA CONSULTA ---
-    // Hacemos la búsqueda y la comparación de la contraseña encriptada en un solo paso
     const [[user]] = await db.query(
       'SELECT socio_id FROM usuarios WHERE username = ? AND password_hash = SHA2(?, 256)',
-      [username, password] // Pasamos el usuario y la contraseña en texto plano
+      [username, password]
     );
 
-    // Si la consulta devuelve un usuario, significa que AMBOS, el usuario y la contraseña, coincidieron
     if (user) {
       res.json({ success: true, socioId: user.socio_id });
     } else {
-      // Si no devuelve nada, es porque el usuario o la contraseña eran incorrectos
       res.json({ success: false, message: 'Usuario o contraseña incorrectos.' });
     }
 
@@ -104,6 +96,9 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Servidor escuchando en http://localhost:${port}`);
+// --- INICIAR EL SERVIDOR ---
+// Render usa la variable de entorno PORT, si no existe (local), usa 3001
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en el puerto ${PORT}`);
 });
