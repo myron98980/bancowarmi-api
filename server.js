@@ -83,28 +83,18 @@ app.post('/login', async (req, res) => {
   }
 
   try {
-    // Buscamos al usuario en la base de datos
+    // --- LA CORRECCIÓN ESTÁ EN ESTA CONSULTA ---
+    // Hacemos la búsqueda y la comparación de la contraseña encriptada en un solo paso
     const [[user]] = await db.query(
-      'SELECT socio_id, password_hash FROM usuarios WHERE username = ?',
-      [username]
+      'SELECT socio_id FROM usuarios WHERE username = ? AND password_hash = SHA2(?, 256)',
+      [username, password] // Pasamos el usuario y la contraseña en texto plano
     );
 
-    // Si el usuario no existe, enviamos un error
-    if (!user) {
-      return res.json({ success: false, message: 'Usuario o contraseña incorrectos.' });
-    }
-
-    // Comparamos la contraseña encriptada
-    const [[passwordMatch]] = await db.query(
-      'SELECT ? = password_hash AS isMatch',
-      [SHA2(password, 256)] // Encriptamos la contraseña que nos llegó para compararla
-    );
-
-    if (passwordMatch.isMatch) {
-      // ¡Éxito! La contraseña coincide
+    // Si la consulta devuelve un usuario, significa que AMBOS, el usuario y la contraseña, coincidieron
+    if (user) {
       res.json({ success: true, socioId: user.socio_id });
     } else {
-      // La contraseña no coincide
+      // Si no devuelve nada, es porque el usuario o la contraseña eran incorrectos
       res.json({ success: false, message: 'Usuario o contraseña incorrectos.' });
     }
 
@@ -113,7 +103,6 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ success: false, message: 'Error interno del servidor.' });
   }
 });
-
 
 app.listen(port, () => {
   console.log(`Servidor escuchando en http://localhost:${port}`);
