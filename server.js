@@ -85,7 +85,7 @@ app.post('/login', async (req, res) => {
   try {
     // Buscamos al usuario en la base de datos
     const [[user]] = await db.query(
-      'SELECT socio_id, password_hash FROM Usuarios WHERE username = ?',
+      'SELECT socio_id, password_hash FROM usuarios WHERE username = ?',
       [username]
     );
 
