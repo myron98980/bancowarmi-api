@@ -124,7 +124,10 @@ app.get('/fines/:socioId', async (req, res) => {
       ORDER BY m.fecha_multa DESC;
     `, [membresia.membresia_id]);
 
-    // Formateamos los datos para que la app los reciba listos
+    // --- INICIO DE LA MEJORA ---
+    // Calculamos la suma total de las multas
+    const totalFines = fines.reduce((sum, fine) => sum + Number(fine.monto_multa), 0);
+
     const formattedFines = fines.map(fine => ({
       id: fine.multa_id,
       reason: fine.tipo_multa,
@@ -132,8 +135,12 @@ app.get('/fines/:socioId', async (req, res) => {
       amount: fine.monto_multa
     }));
 
-    res.json(formattedFines);
-
+    // Devolvemos un objeto que contiene tanto el total como la lista
+    res.json({
+      totalFines: totalFines,
+      finesList: formattedFines
+    });
+    // --- FIN DE LA MEJORA ---
   } catch (error) {
     console.error('Error al obtener las multas:', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
