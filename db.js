@@ -1,17 +1,32 @@
-// db.js
+// BancoWarmiAPI/db.js (VERSIÓN PARA PRODUCCIÓN)
 import mysql from 'mysql2/promise';
 
-// Crea el pool de conexiones a la base de datos
+// --- ¡MUY IMPORTANTE! ---
+// Render inyectará la URL de conexión a tu base de datos automáticamente
+// si la configuras como una "Environment Variable".
+// Si no, usará los valores locales.
+
 const pool = mysql.createPool({
-  host: 'srv1508.hstgr.io',       // O la IP de tu servidor de base de datos
-  user: 'u784147396_noe56',            // Tu usuario de MySQL
-  password: 'n&QoAAP33', // <-- CAMBIA ESTO por tu contraseña de MySQL
-  database: 'u784147396_banco_warmi', // El nombre de tu base de datos
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '', // Contraseña vacía para local
+  database: process.env.DB_NAME || 'banco_warmi',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  // Opciones adicionales para evitar timeouts en producción
+  connectTimeout: 20000,
+  acquireTimeout: 20000,
+  multipleStatements: true,
 });
 
-console.log('Pool de conexiones a la BD creado exitosamente.');
+pool.getConnection()
+  .then(connection => {
+    console.log('✅ Conexión a la BD establecida exitosamente.');
+    connection.release(); // Libera la conexión de prueba
+  })
+  .catch(err => {
+    console.error('❌ Error al conectar con la BD:', err.code, err.message);
+  });
 
 export default pool;
