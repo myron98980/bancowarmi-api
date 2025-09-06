@@ -95,6 +95,50 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ success: false, message: 'Error interno del servidor.' });
   }
 });
+// --- NUEVO ENDPOINT PARA OBTENER LAS MULTAS DE UN SOCIO ---
+app.get('/fines/:socioId', async (req, res) => {
+  const { socioId } = req.params;
+  const cicloId = 1; // Asumimos el ciclo actual
+
+  try {
+    // Primero, encontramos la membresía del socio en el ciclo actual
+    const [[membresia]] = await db.query(
+      'SELECT membresia_id FROM membresias_ciclo WHERE socio_id = ? AND ciclo_id = ?',
+      [socioId, cicloId]
+    );
+
+    if (!membresia) {
+      return res.json([]); // Si no está en el ciclo, devuelve una lista vacía
+    }
+
+    // Luego, buscamos todas las multas asociadas a esa membresía
+    const [fines] = await db.query(`
+      SELECT 
+        m.multa_id,
+        m.monto_multa,
+        m.fecha_multa,
+        tm.descripcion AS tipo_multa
+      FROM multas AS m
+      JOIN tipos_multa AS tm ON m.tipo_multa_id = tm.tipo_multa_id
+      WHERE m.membresia_id = ?
+      ORDER BY m.fecha_multa DESC;
+    `, [membresia.membresia_id]);
+
+    // Formateamos los datos para que la app los reciba listos
+    const formattedFines = fines.map(fine => ({
+      id: fine.multa_id,
+      reason: fine.tipo_multa,
+      date: new Date(fine.fecha_multa).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
+      amount: fine.monto_multa
+    }));
+
+    res.json(formattedFines);
+
+  } catch (error) {
+    console.error('Error al obtener las multas:', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+});
 
 // --- INICIAR EL SERVIDOR ---
 // Render usa la variable de entorno PORT, si no existe (local), usa 3001
