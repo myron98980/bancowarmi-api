@@ -98,26 +98,21 @@ app.post('/login', async (req, res) => {
 // --- NUEVO ENDPOINT PARA OBTENER LAS MULTAS DE UN SOCIO ---
 app.get('/fines/:socioId', async (req, res) => {
   const { socioId } = req.params;
-  const cicloId = 1; // Asumimos el ciclo actual
+  const cicloId = 1;
 
   try {
-    // Primero, encontramos la membresía del socio en el ciclo actual
     const [[membresia]] = await db.query(
       'SELECT membresia_id FROM membresias_ciclo WHERE socio_id = ? AND ciclo_id = ?',
       [socioId, cicloId]
     );
 
     if (!membresia) {
-      return res.json([]); // Si no está en el ciclo, devuelve una lista vacía
+      // Si no hay membresía, devolvemos un objeto con total 0 y lista vacía
+      return res.json({ totalFines: 0, finesList: [] });
     }
 
-    // Luego, buscamos todas las multas asociadas a esa membresía
     const [fines] = await db.query(`
-      SELECT 
-        m.multa_id,
-        m.monto_multa,
-        m.fecha_multa,
-        tm.descripcion AS tipo_multa
+      SELECT m.multa_id, m.monto_multa, m.fecha_multa, tm.descripcion AS tipo_multa
       FROM multas AS m
       JOIN tipos_multa AS tm ON m.tipo_multa_id = tm.tipo_multa_id
       WHERE m.membresia_id = ?
@@ -141,6 +136,7 @@ app.get('/fines/:socioId', async (req, res) => {
       finesList: formattedFines
     });
     // --- FIN DE LA MEJORA ---
+
   } catch (error) {
     console.error('Error al obtener las multas:', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
